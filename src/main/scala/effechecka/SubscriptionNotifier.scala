@@ -3,8 +3,7 @@ package effechecka
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.headers.{BasicHttpCredentials, Authorization}
-import akka.http.scaladsl.model.{FormData, HttpMethods, HttpRequest}
+import akka.http.scaladsl.model.HttpRequest
 import akka.stream._
 import akka.stream.scaladsl._
 import spray.json._
@@ -31,16 +30,18 @@ object SubscriptionNotifier extends App
     GraphDSL.create() { implicit builder =>
 
       val incomingSelectorEvents = builder.add(feed)
-      val subscriptionEventFeed = builder.add(subscriptionHandler("effechecka-subscription"))
+      val subscriptionEventFeed = builder.add(subscriptionHandler("effechecka-subsciption"))
 
       val generateSubscriptionEvents = builder.add(Flow[String]
         .map(jsonString => jsonString.parseJson.convertTo[MonitorStatus])
         .filter(_.status == "ready")
         .map(_.selector)
         .mapConcat(ocSelector => {
-          val ocRequest = OccurrenceRequest(ocSelector, Some(1))
-          if (occurrencesFor(ocRequest).hasNext) {
-            subscribersOf(ocSelector).map(subscriber => SubscriptionEvent(ocRequest, subscriber, "notify"))
+          val ocRequest = OccurrenceCollectionRequest(ocSelector, 1)
+          val occurrences: List[Occurrence] = occurrencesFor(ocRequest)
+
+          if (occurrences.nonEmpty) {
+            subscribersOf(ocSelector).map(subscriber => SubscriptionEvent(ocSelector, subscriber, "notify"))
           } else {
             List()
           }
@@ -53,7 +54,7 @@ object SubscriptionNotifier extends App
     }
   }
 
-  def subscriberEventToNotification(apikey: String = "someApiKey") = {
+  def subscriberEventToMailgunRequest(apikey: String = "someApiKey") = {
     import GraphDSL.Implicits._
 
     GraphDSL.create() { implicit builder =>
@@ -62,27 +63,12 @@ object SubscriptionNotifier extends App
       }))
 
       val generateEmail = builder.add(Flow[SubscriptionEvent]
-        .filter(event => event.subscriber.getProtocol == "mailto")
         .filter(event => List("subscribe", "unsubscribe", "notify").contains(event.action))
         .map(EmailUtils.emailFor))
 
-      val generateWebHookRequest = builder.add(Flow[SubscriptionEvent]
-        .filter(event => List("http", "https").contains(event.subscriber.getProtocol))
-        .filter(event => List("notify").contains(event.action))
-        .map(event => {
-          HttpRequest(method = HttpMethods.GET,
-            uri = EmailUtils.uuidUrlFor(event = event, baseURL = event.subscriber.toString).toString)
-        }))
+      generateEmail ~> generateHttpRequest
 
-      val inbox = builder.add(Flow[SubscriptionEvent])
-      val fanOut: UniformFanOutShape[SubscriptionEvent, SubscriptionEvent] = builder.add(Broadcast[SubscriptionEvent](2))
-      val fanIn: UniformFanInShape[HttpRequest, HttpRequest] = builder.add(Merge[HttpRequest](2))
-
-
-      inbox ~>  fanOut ~> generateEmail ~> generateHttpRequest ~> fanIn
-                fanOut ~> generateWebHookRequest               ~> fanIn
-
-      FlowShape(inbox.in, fanIn.out)
+      FlowShape(generateEmail.in, generateHttpRequest.out)
     }
   }
 
@@ -102,16 +88,16 @@ object SubscriptionNotifier extends App
   def deliverNotificationsToSubscribers(apiKey: String = "someApiKey") = {
     import GraphDSL.Implicits._
 
-    GraphDSL.create() { implicit builder =>
-      val eventSource = builder.add(subscriberFeedToSubscriberEvent)
-      val toMailgunRequests = builder.add(subscriberEventToNotification(apiKey))
-      val sendRequest = builder.add(Sink.foreach[HttpRequest](
-        Http().singleRequest(_)
-      ))
+        GraphDSL.create() { implicit builder =>
+          val eventSource = builder.add(subscriberFeedToSubscriberEvent)
+          val toMailgunRequests = builder.add(subscriberEventToMailgunRequest(apiKey))
+          val sendRequest = builder.add(Sink.foreach[HttpRequest](
+            Http().singleRequest(_)
+          ))
 
-      eventSource ~> toMailgunRequests ~> sendRequest
-      ClosedShape
-    }
+          eventSource ~> toMailgunRequests ~> sendRequest
+          ClosedShape
+        }
   }
 
   materializer.materialize(deliverNotificationsToSubscribers(config.getString("effechecka.mailgun.apikey")))

@@ -13,7 +13,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import spray.json._
 
 
-case class SubscriptionEvent(request: OccurrenceRequest, subscriber: URL, action: String)
+case class SubscriptionEvent(selector: OccurrenceSelector, subscriber: URL, action: String)
 
 trait SubscriptionProtocols extends Protocols {
 
@@ -62,8 +62,8 @@ trait SubscriptionFeed extends Subscriptions with SubscriptionProtocols {
     GraphDSL.create() { implicit builder =>
       val flow = Flow[SubscriptionEvent].map(event => {
         event.action match {
-          case "subscribe" => subscribe(event.subscriber, event.request.selector)
-          case "unsubscribe" => unsubscribe(event.subscriber, event.request.selector)
+          case "subscribe" => subscribe(event.subscriber, event.selector)
+          case "unsubscribe" => unsubscribe(event.subscriber, event.selector)
           case _ =>  //pass through
         }
 

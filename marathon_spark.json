@@ -1,0 +1,19 @@
+{ "id" : "spark-mesos-cluster-dispatcher",
+  "cmd" : "cd spark-1.6.0-bin-hadoop2.6 && chmod u+x bin/spark-class && bin/spark-class org.apache.spark.deploy.mesos.MesosClusterDispatcher --master mesos://127.0.1.1:5050",
+  "cpus": 1,
+  "mem": 1024.0,
+  "instances": 1,
+  "uris" : ["http://d3kbcqa49mib13.cloudfront.net/spark-1.6.0-bin-hadoop2.6.tgz"],
+"healthChecks": [ 
+      {
+        "path": "/",
+        "port": 8081,
+        "protocol": "HTTP",
+        "gracePeriodSeconds": 300,
+        "intervalSeconds": 60,
+        "timeoutSeconds": 20,
+        "maxConsecutiveFailures": 3
+      }
+    ]
+
+}

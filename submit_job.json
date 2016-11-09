@@ -1,0 +1,22 @@
+{
+  "action" : "CreateSubmissionRequest",
+  "appArgs" : [ "/home/int/data/idigbio/*occurrence.txt", 
+		"Animalia|Insecta",
+		"ENVELOPE(-150,-50,40,10)",
+		"cassandra",
+		"bodyMass < 50 g",
+		"/home/int/data/idigbio/*traits.csv" ],
+  "appResource" : "file:/home/int/idigbio-spark/target/scala-2.10/iDigBio-LD-assembly-1.1.jar",
+  "clientSparkVersion" : "1.5.2",
+  "environmentVariables" : {
+    "SPARK_ENV_LOADED" : "1"
+  },
+  "mainClass" : "ChecklistGenerator",
+  "sparkProperties" : {
+    "spark.jars" : "file:/home/int/idigbio-spark/target/scala-2.10/iDigBio-LD-assembly-1.1.jar",
+    "spark.app.name" : "effechecka",
+    "spark.submit.deployMode" : "cluster",
+    "spark.executor.memory" : "64G",
+    "spark.master" : "spark://c18node15:6066"
+  }
+}
